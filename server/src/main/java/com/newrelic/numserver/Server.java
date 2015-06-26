@@ -1,6 +1,5 @@
 package com.newrelic.numserver;
 
-import ch.qos.logback.classic.spi.STEUtil;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
@@ -69,7 +68,7 @@ public class Server {
         try {
             Server server = new Server("0.0.0.0", 4000, 5);
             server.start();
-            server.waitForTermination();
+            server.blockIndefinitelyForServerTermination();
         } catch (InterruptedException | IOException e) {
             log.error("Caught exception in main method", e);
         }
@@ -110,22 +109,24 @@ public class Server {
     }
 
     private void shutdown() {
-        // todo : convert these all to Services/ServiceManager
-        clientAcceptPool.shutdownNow();
-        clientConnectionPool.shutdownNow();
+        try {
+            // todo : convert these all to Services/ServiceManager
+            clientAcceptPool.shutdownNow();
+            clientConnectionPool.shutdownNow();
 
-        if (serverSocket != null) {
-            try {
-                serverSocket.close();
-            } catch (IOException e) {
-                log.debug("Failed to close server socket", e);
+            if (serverSocket != null) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    log.debug("Failed to close server socket", e);
+                }
             }
+        } finally {
+            serviceManager.stopAsync();
         }
-
-        serviceManager.stopAsync();
     }
 
-    private void waitForTermination() {
+    private void blockIndefinitelyForServerTermination() {
         try {
             while (! clientAcceptPool.awaitTermination(1000, TimeUnit.MILLISECONDS));
         } catch (InterruptedException e) {

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -37,7 +38,8 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
 
     private static final Logger log = LoggerFactory.getLogger(SingleFileDatabase.class);
 
-    @VisibleForTesting static final String EOL = System.getProperty("line.separator");
+    @VisibleForTesting static final byte[] EOL = System.getProperty("line.separator").getBytes(Charsets.UTF_8);
+
     private static final int QUEUE_SIZE = 1024 * 1024;
 
     private final Path dbFile;
@@ -47,18 +49,13 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
     private final Lock bsLock = new ReentrantLock();
 
     private final BlockingQueue<Integer> writeQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
-    private final ByteBuffer bb = ByteBuffer.allocate((4 + EOL.length()) * QUEUE_SIZE);
+    private final ByteBuffer bb = ByteBuffer.allocate((4 + EOL.length) * QUEUE_SIZE);
     private final Collection<Integer> boxCar = new ByteBufferBackedCollection(bb);
 
     private SeekableByteChannel fileChannel;
 
     public SingleFileDatabase(Path dbFile) throws IOException {
         this.dbFile = dbFile;
-    }
-
-    @VisibleForTesting SingleFileDatabase(SeekableByteChannel fileChannel) {
-        this.dbFile = null;
-        this.fileChannel = fileChannel;
     }
 
     @Override
@@ -79,6 +76,7 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         if (writeQueue.drainTo(boxCar) > 0) {
             flushAndReset(bb);
         }
+        ((FileChannel) fileChannel).force(false);
         fileChannel.close();
     }
 
@@ -112,7 +110,7 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         try {
             fileChannel.write(bb);
         } catch (IOException e) {
-            // todo : test this!  should be able to re-open and re-populate data file
+            // todo : create test for this!  should be able to re-open and re-populate data file
             log.error("Exception handled when writing to data file", e);
         }
         bb.clear();
@@ -134,7 +132,6 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
 
     private static class ByteBufferBackedCollection extends AbstractCollection<Integer> {
 
-        private static final byte[] EOL_BYTES = EOL.getBytes(Charsets.UTF_8);
         private final ByteBuffer bb;
 
         private ByteBufferBackedCollection(ByteBuffer bb) {
@@ -144,7 +141,7 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         @Override
         public boolean add(Integer integer) {
             bb.putInt(integer);
-            bb.put(EOL_BYTES);
+            bb.put(EOL);
             return true;
         }
 
