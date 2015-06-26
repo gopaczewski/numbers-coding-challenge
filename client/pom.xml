@@ -5,30 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.newrelic</groupId>
-    <artifactId>numbers-server</artifactId>
+    <artifactId>numbers-client</artifactId>
     <version>1.0-SNAPSHOT</version>
-
-    <dependencies>
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>18.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-all</artifactId>
-            <version>1.10.19</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
 
     <build>
         <plugins>
@@ -55,13 +33,10 @@
                 </executions>
                 <configuration>
                     <executable>java</executable>
-                    <mainClass>com.newrelic.numserver.Server</mainClass>
+                    <mainClass>com.newrelic.numclient.NumbersLoadDriver</mainClass>
                     <arguments>
-                        <argument>-Xms1024M</argument>
-                        <argument>-Xmx2048M</argument>
-                        <argument>-classpath</argument>
-                        <classpath />
-                        <argument>com.newrelic.numserver.Server</argument>
+                        <argument>localhost</argument>
+                        <argument>10</argument>
                     </arguments>
                 </configuration>
             </plugin>

@@ -14,11 +14,13 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.AbstractCollection;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
@@ -31,13 +33,11 @@ import static java.nio.file.StandardOpenOption.WRITE;
 public class SingleFileDatabase extends AbstractExecutionThreadService implements Database {
 
     static final String EOL = System.getProperty("line.separator");
-
     private static final int QUEUE_SIZE = 1024 * 1024;
 
     private final Path dbFile;
-    private final Set<Integer> index = new HashSet<>(10 * 1024 * 1024);
 
-    // todo : implement custom BlockingQueue backed by ByteBuffer?
+    private final Set<Integer> index = Collections.synchronizedSet(new HashSet<>(10 * 1024 * 1024));
     private final BlockingQueue<Integer> writeQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private final ByteBuffer bb = ByteBuffer.allocate((4 + EOL.length()) * QUEUE_SIZE);
     private final Collection<Integer> boxCar = new ByteBufferBackedCollection(bb);
@@ -79,7 +79,12 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         while (isRunning()) {
             if (writeQueue.drainTo(boxCar) == 0) {
                 // when write queue is empty block here to prevent busy loop
-                boxCar.add(writeQueue.take());
+                Integer number = writeQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (number == null) {
+                    // timeout with no data
+                    continue;
+                }
+                boxCar.add(number);
             }
             flushAndReset(bb);
         }

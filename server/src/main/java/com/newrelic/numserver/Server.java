@@ -73,7 +73,7 @@ public class Server {
 
         try {
             serverSocket = new ServerSocket();
-            serverSocket.setSoTimeout(2000);
+            serverSocket.setSoTimeout(2000);  // 2 second timeout for accept
             serverSocket.bind(new InetSocketAddress(listenAddress, listenPort));
         } catch (IOException e) {
             // todo
@@ -134,7 +134,7 @@ public class Server {
 
         private Client(Socket socket) throws SocketException {
             this.socket = Objects.requireNonNull(socket);
-            this.socket.setSoTimeout(5000);
+            this.socket.setSoTimeout(10000); // 10s timeout for client socket read
             // todo: convert to debug
             System.out.println("Client connected.");
         }
@@ -150,7 +150,7 @@ public class Server {
                     Protocol.ClientInputResponse pr = protocol.acceptInput(line);
 
                     // todo: remove/convert to logging
-                    System.out.println(pr);
+                    //System.out.println(pr);
 
                     if (Protocol.ClientInputResponse.TERMINATE.equals(pr)) {
                         Server.this.shutdown();
