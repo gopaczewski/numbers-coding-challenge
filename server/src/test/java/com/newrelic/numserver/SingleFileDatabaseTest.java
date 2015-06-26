@@ -33,16 +33,6 @@ public class SingleFileDatabaseTest {
     }
 
     @Test
-    public void tryInsert_nonZero() throws Exception {
-        database.tryInsert(7777);
-        verify(sbc).write(captor.capture());
-
-        byte[] expected = ByteBuffer.allocate(5).putInt(7777)
-                .put(SingleFileDatabase.EOL.getBytes(Charsets.UTF_8)).array();
-        assertArrayEquals(expected, captor.getValue().array());
-    }
-
-    @Test
     public void isDuplicate() throws Exception {
         assertFalse(database.isDuplicate(0));
         assertTrue(database.isDuplicate(0));

@@ -3,6 +3,8 @@ package com.newrelic.numserver;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -33,15 +35,16 @@ import static java.nio.file.StandardOpenOption.WRITE;
  */
 public class SingleFileDatabase extends AbstractExecutionThreadService implements Database {
 
-    static final String EOL = System.getProperty("line.separator");
+    private static final Logger log = LoggerFactory.getLogger(SingleFileDatabase.class);
+
+    @VisibleForTesting static final String EOL = System.getProperty("line.separator");
     private static final int QUEUE_SIZE = 1024 * 1024;
 
     private final Path dbFile;
 
-    private final Lock bsLock = new ReentrantLock();
-
     // cache of existing numbers, large enough to hold numbers with 9 digits
     private final BitSet bs = new BitSet(1000000000);
+    private final Lock bsLock = new ReentrantLock();
 
     private final BlockingQueue<Integer> writeQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private final ByteBuffer bb = ByteBuffer.allocate((4 + EOL.length()) * QUEUE_SIZE);
@@ -84,9 +87,9 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         while (isRunning()) {
             if (writeQueue.drainTo(boxCar) == 0) {
                 // when write queue is empty block here to prevent busy loop
-                Integer number = writeQueue.poll(100, TimeUnit.MILLISECONDS);
+                Integer number = writeQueue.poll(200, TimeUnit.MILLISECONDS);
                 if (number == null) {
-                    // timeout with no data
+                    log.debug("Timeout in db writer thread waiting for data");
                     continue;
                 }
                 boxCar.add(number);
@@ -108,8 +111,9 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         bb.flip();
         try {
             fileChannel.write(bb);
-        } catch (IOException x) {
-            System.out.println("Exception thrown: " + x);
+        } catch (IOException e) {
+            // todo : test this!  should be able to re-open and re-populate data file
+            log.error("Exception handled when writing to data file", e);
         }
         bb.clear();
     }

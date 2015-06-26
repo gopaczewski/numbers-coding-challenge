@@ -1,11 +1,13 @@
 package com.newrelic.numserver;
 
+import ch.qos.logback.classic.spi.STEUtil;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -28,6 +30,8 @@ import java.util.concurrent.TimeUnit;
  * connections.  Client connections are accepted in the main thread.
  */
 public class Server {
+
+    private static final Logger log = LoggerFactory.getLogger(Server.class);
 
     private final String listenAddress;
     private final int listenPort;
@@ -63,13 +67,11 @@ public class Server {
 
     public static void main(String[] args) {
         try {
-            // todo: make these cmdline args
             Server server = new Server("0.0.0.0", 4000, 5);
             server.start();
             server.waitForTermination();
         } catch (InterruptedException | IOException e) {
-            // todo
-            e.printStackTrace();
+            log.error("Caught exception in main method", e);
         }
     }
 
@@ -79,8 +81,7 @@ public class Server {
             serverSocket.setSoTimeout(2000);  // 2 second timeout for accept
             serverSocket.bind(new InetSocketAddress(listenAddress, listenPort));
         } catch (IOException e) {
-            // todo
-            System.err.println("Failed to bind server socket: \n" + e);
+            log.error("Failed to bind server socket.", e);
             throw e;
         }
 
@@ -90,14 +91,14 @@ public class Server {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     if (clientPermits.tryAcquire(1, 500, TimeUnit.MILLISECONDS)) {
-                        Socket socket = null;
                         try {
-                            socket = serverSocket.accept();
-                            final Client client = new Client(socket);
+                            final Client client = new Client(serverSocket.accept());
                             clientConnectionPool.execute(client::acceptInput);
+                        } catch (SocketTimeoutException e) {
+                            log.debug("Timeout waiting for client connection", e);
+                            clientPermits.release();
                         } catch (IOException e) {
-                            // this occurs on socket timeout or when the socket is closed at shutdown
-                            // todo: log warn
+                            log.warn("Handled IOException in socket accept loop", e);
                             clientPermits.release();
                         }
                     }
@@ -117,7 +118,7 @@ public class Server {
             try {
                 serverSocket.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                log.debug("Failed to close server socket", e);
             }
         }
 
@@ -132,6 +133,9 @@ public class Server {
         }
     }
 
+    /*
+     * Handles reading from a single remote client.  Handles closing the wrapped socket internally.
+     */
     private class Client {
 
         private final Socket socket;
@@ -139,8 +143,7 @@ public class Server {
         private Client(Socket socket) throws SocketException {
             this.socket = Objects.requireNonNull(socket);
             this.socket.setSoTimeout(10000); // 10s timeout for client socket read
-            // todo: convert to debug
-            System.out.println("Client connected.");
+            log.info("Client connected.");
         }
 
         private void acceptInput() {
@@ -155,6 +158,7 @@ public class Server {
 
                     if (Protocol.ClientInputResponse.TERMINATE.equals(pr)) {
                         Server.this.shutdown();
+                        closeClient = true;
                     } else if (Protocol.ClientInputResponse.CLOSE_CONNECTION.equals(pr)) {
                         closeClient = true;
                     } else {
@@ -162,24 +166,22 @@ public class Server {
                     }
                 }
             } catch (SocketTimeoutException e) {
-                // todo: log debug
+                log.debug("Socket read timeout", e);
             } catch (IOException e) {
-                // todo
-                e.printStackTrace();
+                log.warn("Handled socket IOException", e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
                 clientPermits.release();
+
                 try {
                     socket.close();
                 } catch (IOException e) {
-                    // todo
-                    e.printStackTrace();
+                    log.debug("Failed to close client socket", e);
                 }
             }
 
-            // TODO: convert to debug
-            System.out.println("Client disconnected.");
+            log.info("Client disconnected.");
         }
     }
 }
