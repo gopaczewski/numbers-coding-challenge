@@ -8,9 +8,9 @@ This application is comprised of a server that implements the requirements of th
 
 The server requires JDK 8 and Maven to be installed both to build and run.
 
-## Build
+## Build and run tests
 
-$ cd server/ && mvn clean install
+$ cd server/ && mvn clean test
 
 ## Run
 
@@ -20,4 +20,4 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/{jdk-version}/Contents/Home
 
 Then
 
-$ cd server/ && mvn exec:java -Dexec.mainClass="com.newrelic.numserver.Server"
+$ cd server/ && mvn compile exec:java

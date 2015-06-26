@@ -1,5 +1,7 @@
 package com.newrelic.numserver;
 
+import com.google.common.util.concurrent.Service;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,6 +11,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -33,15 +36,21 @@ public class Server {
 
     // todo: DI/refactor these to interface
     private final Protocol protocol = new Protocol();
-    private final Database database = new SingleFileDatabase();
     private final MetricsReporter metricsReporter = new ConsoleMetricsReporter(Duration.ofSeconds(10));
 
-    public Server(String listenAddress, int listenPort, int maxConcurrentClients) {
+    // todo : remove
+    private final Database database;
+    private final Service databaseSvc;
+
+    public Server(String listenAddress, int listenPort, int maxConcurrentClients) throws IOException {
         this.listenAddress = listenAddress;
         this.listenPort = listenPort;
         this.clientAcceptPool = Executors.newSingleThreadExecutor();
         this.clientPermits = new Semaphore(maxConcurrentClients);
         this.clientConnectionPool = Executors.newFixedThreadPool(maxConcurrentClients);
+        this.database = new SingleFileDatabase(Paths.get("numbers.log"));
+        // todo : remove
+        this.databaseSvc = (SingleFileDatabase) database;
     }
 
     public static void main(String[] args) {
@@ -57,6 +66,9 @@ public class Server {
     }
 
     public void start() throws InterruptedException, IOException {
+        // todo : move to ServiceManager
+        databaseSvc.startAsync();
+        // todo : migrate to guava service
         metricsReporter.start();
 
         try {
@@ -92,6 +104,7 @@ public class Server {
     }
 
     private void shutdown() {
+        // todo : convert these all to Services/ServiceManager
         clientAcceptPool.shutdownNow();
         clientConnectionPool.shutdownNow();
         metricsReporter.shutdown();
@@ -103,6 +116,8 @@ public class Server {
                 e.printStackTrace();
             }
         }
+
+        databaseSvc.stopAsync();
     }
 
     private void waitForTermination() {
@@ -150,6 +165,8 @@ public class Server {
             } catch (IOException e) {
                 // todo
                 e.printStackTrace();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } finally {
                 clientPermits.release();
                 try {
