@@ -17,9 +17,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -37,7 +39,9 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
 
     private final Path dbFile;
 
-    private final Set<Integer> index = Collections.synchronizedSet(new HashSet<>(10 * 1024 * 1024));
+    private final Set<Integer> index = Collections.newSetFromMap(
+        new ConcurrentHashMap<>(100 * 1024 * 1024, 1, 5));
+
     private final BlockingQueue<Integer> writeQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private final ByteBuffer bb = ByteBuffer.allocate((4 + EOL.length()) * QUEUE_SIZE);
     private final Collection<Integer> boxCar = new ByteBufferBackedCollection(bb);
@@ -115,6 +119,7 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
 
     private static class ByteBufferBackedCollection extends AbstractCollection<Integer> {
 
+        private static final byte[] EOL_BYTES = EOL.getBytes(Charsets.UTF_8);
         private final ByteBuffer bb;
 
         private ByteBufferBackedCollection(ByteBuffer bb) {
@@ -124,7 +129,7 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
         @Override
         public boolean add(Integer integer) {
             bb.putInt(integer);
-            bb.put(EOL.getBytes(Charsets.UTF_8));
+            bb.put(EOL_BYTES);
             return true;
         }
 

@@ -36,7 +36,7 @@
                     <mainClass>com.newrelic.numclient.NumbersLoadDriver</mainClass>
                     <arguments>
                         <argument>localhost</argument>
-                        <argument>10</argument>
+                        <argument>3600</argument>
                     </arguments>
                 </configuration>
             </plugin>
