@@ -1,7 +1,7 @@
 package com.newrelic.numserver;
 
 /**
- * TODO
+ * A persistent storage for integer numbers.
  */
 public interface Database {
 

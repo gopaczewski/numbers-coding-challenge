@@ -1,5 +1,7 @@
 package com.newrelic.numserver;
 
+import com.google.common.util.concurrent.AbstractScheduledService;
+
 import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -9,10 +11,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Reports application metrics to the console.
  */
-public class ConsoleMetricsReporter implements MetricsReporter {
+public class ConsoleMetricsReporter extends AbstractScheduledService implements MetricsReporter {
 
-    // todo: DI
-    private final ScheduledExecutorService executorService;
     private final Duration reportingFrequency;
 
     private final AtomicInteger uniqueNumbersDeltaCount = new AtomicInteger(0);
@@ -21,7 +21,20 @@ public class ConsoleMetricsReporter implements MetricsReporter {
 
     public ConsoleMetricsReporter(Duration reportingFrequency) {
         this.reportingFrequency = reportingFrequency;
-        this.executorService = Executors.newScheduledThreadPool(1);
+    }
+
+    @Override
+    protected void runOneIteration() throws Exception {
+        int uniqueDelta = uniqueNumbersDeltaCount.getAndSet(0);
+        int duplicatesDelta = duplicateNumbersDeltaCount.getAndSet(0);
+        int totalUnique = totalUniqueNumbersCount.addAndGet(uniqueDelta);
+        System.out.println(String.format("Received %d unique numbers, %d duplicates. Unique total: %d",
+                uniqueDelta, duplicatesDelta, totalUnique));
+    }
+
+    @Override
+    protected Scheduler scheduler() {
+        return Scheduler.newFixedRateSchedule(0, reportingFrequency.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -42,14 +55,7 @@ public class ConsoleMetricsReporter implements MetricsReporter {
     };
 
     @Override
-    public void start() {
-        executorService.scheduleWithFixedDelay(reportTask, reportingFrequency.toMillis(), reportingFrequency.toMillis(),
-                TimeUnit.MILLISECONDS);
-    }
-
-    @Override
-    public void shutdown() {
-        executorService.shutdownNow();
+    protected void shutDown() throws Exception {
         // one last write of metrics in the caller's thread
         reportTask.run();
     }

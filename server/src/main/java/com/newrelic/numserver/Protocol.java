@@ -39,10 +39,6 @@ public class Protocol {
         INSERT_NUMBER, CLOSE_CONNECTION, TERMINATE
     }
 
-    /*
-     * TODO : Represent as different subtypes for when number is not present?
-     * TODO : Don't allow construction with VALID_NUMBER
-     */
     public static class ClientInputResponse {
         private final ClientInputAction cmd;
         private final Optional<Integer> number;

@@ -58,7 +58,7 @@
                     <mainClass>com.newrelic.numserver.Server</mainClass>
                     <arguments>
                         <argument>-Xms1024M</argument>
-                        <argument>-Xmx4096M</argument>
+                        <argument>-Xmx1024M</argument>
                         <argument>-classpath</argument>
                         <classpath />
                         <argument>com.newrelic.numserver.Server</argument>

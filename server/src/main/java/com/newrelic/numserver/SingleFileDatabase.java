@@ -4,7 +4,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
 
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
@@ -13,16 +12,16 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.AbstractCollection;
+import java.util.BitSet;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
@@ -39,8 +38,10 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
 
     private final Path dbFile;
 
-    private final Set<Integer> index = Collections.newSetFromMap(
-        new ConcurrentHashMap<>(100 * 1024 * 1024, 1, 5));
+    private final Lock bsLock = new ReentrantLock();
+
+    // cache of existing numbers, large enough to hold numbers with 9 digits
+    private final BitSet bs = new BitSet(1000000000);
 
     private final BlockingQueue<Integer> writeQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private final ByteBuffer bb = ByteBuffer.allocate((4 + EOL.length()) * QUEUE_SIZE);
@@ -114,7 +115,17 @@ public class SingleFileDatabase extends AbstractExecutionThreadService implement
     }
 
     @VisibleForTesting boolean isDuplicate(int number) {
-        return ! index.add(number);
+        bsLock.lock();
+        try {
+            if (bs.get(number)) {
+                return true;
+            } else {
+                bs.set(number);
+                return false;
+            }
+        } finally {
+            bsLock.unlock();
+        }
     }
 
     private static class ByteBufferBackedCollection extends AbstractCollection<Integer> {

@@ -9,18 +9,6 @@ package com.newrelic.numserver;
 public interface MetricsReporter {
 
     /**
-     * Start reporting metrics.
-     *
-     * @throws IllegalStateException if invoked more than once, a new instance must be created instead
-     */
-    void start();
-
-    /**
-     * Stop reporting metrics and close any associated resources.
-     */
-    void shutdown();
-
-    /**
      * Increment counters for an insert attempt.
      *
      * @param isNewNumber true to indicate a new number was inserted, false for a duplicate

@@ -1,8 +1,11 @@
 package com.newrelic.numserver;
 
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.ServiceManager;
 
 import java.io.BufferedReader;
+import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -14,6 +17,7 @@ import java.net.SocketTimeoutException;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -32,15 +36,12 @@ public class Server {
     private final ExecutorService clientAcceptPool;
     private final ExecutorService clientConnectionPool;
 
-    private ServerSocket serverSocket;
-
-    // todo: DI/refactor these to interface
     private final Protocol protocol = new Protocol();
-    private final MetricsReporter metricsReporter = new ConsoleMetricsReporter(Duration.ofSeconds(10));
-
-    // todo : remove
+    private final MetricsReporter metricsReporter;
+    private final ServiceManager serviceManager;
     private final Database database;
-    private final Service databaseSvc;
+
+    private ServerSocket serverSocket;
 
     public Server(String listenAddress, int listenPort, int maxConcurrentClients) throws IOException {
         this.listenAddress = listenAddress;
@@ -48,9 +49,16 @@ public class Server {
         this.clientAcceptPool = Executors.newSingleThreadExecutor();
         this.clientPermits = new Semaphore(maxConcurrentClients);
         this.clientConnectionPool = Executors.newFixedThreadPool(maxConcurrentClients);
-        this.database = new SingleFileDatabase(Paths.get("numbers.log"));
-        // todo : remove
-        this.databaseSvc = (SingleFileDatabase) database;
+
+        // todo : DI via Guice
+        SingleFileDatabase sfdb = new SingleFileDatabase(Paths.get("numbers.log"));
+        this.database = sfdb;
+
+        ConsoleMetricsReporter reporter = new ConsoleMetricsReporter(Duration.ofSeconds(10));
+        this.metricsReporter = reporter;
+
+        Set<Service> services = Sets.newHashSet(sfdb, reporter);
+        this.serviceManager = new ServiceManager(services);
     }
 
     public static void main(String[] args) {
@@ -66,11 +74,6 @@ public class Server {
     }
 
     public void start() throws InterruptedException, IOException {
-        // todo : move to ServiceManager
-        databaseSvc.startAsync();
-        // todo : migrate to guava service
-        metricsReporter.start();
-
         try {
             serverSocket = new ServerSocket();
             serverSocket.setSoTimeout(2000);  // 2 second timeout for accept
@@ -80,6 +83,8 @@ public class Server {
             System.err.println("Failed to bind server socket: \n" + e);
             throw e;
         }
+
+        serviceManager.startAsync();
 
         clientAcceptPool.execute(() -> {
             while (!Thread.currentThread().isInterrupted()) {
@@ -107,7 +112,6 @@ public class Server {
         // todo : convert these all to Services/ServiceManager
         clientAcceptPool.shutdownNow();
         clientConnectionPool.shutdownNow();
-        metricsReporter.shutdown();
 
         if (serverSocket != null) {
             try {
@@ -117,7 +121,7 @@ public class Server {
             }
         }
 
-        databaseSvc.stopAsync();
+        serviceManager.stopAsync();
     }
 
     private void waitForTermination() {
@@ -148,9 +152,6 @@ public class Server {
                 boolean closeClient = false;
                 while (!Thread.currentThread().isInterrupted() && !closeClient && (line = br.readLine()) != null) {
                     Protocol.ClientInputResponse pr = protocol.acceptInput(line);
-
-                    // todo: remove/convert to logging
-                    //System.out.println(pr);
 
                     if (Protocol.ClientInputResponse.TERMINATE.equals(pr)) {
                         Server.this.shutdown();
